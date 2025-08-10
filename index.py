@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -8,9 +9,65 @@ from api import deps
 from api.config import settings
 from api.util import prepare_results, dedup_combined_results
 from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
 
 
 pinecone_indexes = {}
+
+def _should_store_memory_sync(candidate_text: str) -> str:
+    """Call OpenAI Responses API synchronously and return raw output_text."""
+    api_key: Optional[str] = settings.openai_api_key
+    model: str = settings.openai_model
+    if not api_key:
+        # No key configured; indicate default store behavior
+        return "NO_API_KEY"
+
+    client = OpenAI(api_key=api_key)
+
+    system_instruction = (
+        "You are a strict filter that decides whether a piece of text contains a durable, user-specific fact worth storing as a memory. "
+        "Return exactly 'YES' if the text states a concrete, retrievable fact (e.g., preferences, schedules, bios, persistent project details). "
+        "Return exactly 'NO' if it is a transient chat message, question, speculation, vague thought, or lacks a clear factual statement."
+    )
+    user_input = f"Text: {candidate_text}\nAnswer 'YES' or 'NO' only."
+
+    try:
+        resp = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_input},
+            ],
+        )
+        return getattr(resp, "output_text", "") or ""
+    except Exception as e:
+        return f"ERROR: {e}"
+
+async def should_store_memory(candidate_text: str) -> bool:
+    """Gate memory storage via OpenAI Responses API. Logs decision and returns True/False."""
+    loop = asyncio.get_running_loop()
+    raw = await loop.run_in_executor(None, lambda: _should_store_memory_sync(candidate_text))
+
+    model = settings.openai_model
+    snippet = (candidate_text or "")[:120].replace("\n", " ")
+
+    if raw == "NO_API_KEY":
+        print("[LLM Gate] No OPENAI_API_KEY configured. Defaulting to STORE.")
+        return True
+    if raw.startswith("ERROR:"):
+        print(f"[LLM Gate] ERROR defaulting to STORE: {raw}")
+        return True
+
+    normalized = raw.strip().upper()
+    if normalized.startswith("YES"):
+        print(f"[LLM Gate] model={model} decision=STORE ai_response='{raw.strip()}' text='{snippet}'")
+        return True
+    if normalized.startswith("NO"):
+        print(f"[LLM Gate] model={model} decision=SKIP ai_response='{raw.strip()}' text='{snippet}'")
+        return False
+
+    print(f"[LLM Gate] model={model} decision=STORE reason=UNCLEAR ai_response='{raw.strip()}' text='{snippet}'")
+    return True
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -96,6 +153,17 @@ async def cascading_retrieval_options():
 async def store_memory(memory_request: MemoryStoreRequest):
     """Store a new memory in Pinecone"""
     try:
+        # LLM gating: only store if the content is considered a durable fact
+        should_store = await should_store_memory(memory_request.message)
+        if not should_store:
+            print("[Store] Skipped storing memory due to LLM gate.")
+            return {
+                "success": True,
+                "message": "Skipped storing: LLM gate determined this is not a durable fact.",
+                "skipped": True,
+                "timestamp": memory_request.timestamp,
+                "source": memory_request.source,
+            }
         # Generate a unique ID for the memory
         memory_id = str(uuid.uuid4())
         
@@ -121,6 +189,7 @@ async def store_memory(memory_request: MemoryStoreRequest):
         )
         
         print(f"Stored memory in Pinecone: {memory_request.message[:50]}...")
+        print("[Store] Stored memory after LLM gate approval.")
         
         return {
             "success": True,
