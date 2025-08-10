@@ -31,6 +31,14 @@
       "js": ["claude/content.js"]
     },
     {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["gemini/content.js"]
+    },
+    {
+      "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
+      "js": ["grok/content.js"]
+    },
+    {
       "matches": ["<all_urls>"],
       "js": ["sidebar.js"],
       "run_at": "document_end"
