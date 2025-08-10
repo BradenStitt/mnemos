@@ -102,17 +102,41 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
       `;
       
-      // Add click handler to copy memory to clipboard
+      // Add click handler to inject memory into current page
       memoryElement.addEventListener('click', () => {
         const text = memory.chunk_text || memory.text || '';
-        navigator.clipboard.writeText(text).then(() => {
-          // Show a brief success indicator
-          memoryElement.style.backgroundColor = '#34a853';
-          setTimeout(() => {
-            memoryElement.style.backgroundColor = '';
-          }, 500);
-        }).catch(err => {
-          console.error('Failed to copy text: ', err);
+        
+        // Send message to content script to inject the memory
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+          console.log('Sending message to tab:', tabs[0].id, 'with memory:', text);
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'injectMemory',
+            memory: text
+          }, function(response) {
+            console.log('Response from content script:', response);
+            if (chrome.runtime.lastError) {
+              console.error('Chrome runtime error:', chrome.runtime.lastError);
+            }
+            
+            if (response && response.success) {
+              // Show success indicator
+              memoryElement.style.backgroundColor = '#34a853';
+              setTimeout(() => {
+                memoryElement.style.backgroundColor = '';
+              }, 500);
+            } else {
+              console.log('Memory injection failed, falling back to clipboard');
+              // Fallback to clipboard if injection fails
+              navigator.clipboard.writeText(text).then(() => {
+                memoryElement.style.backgroundColor = '#007AFF';
+                setTimeout(() => {
+                  memoryElement.style.backgroundColor = '';
+                }, 500);
+              }).catch(err => {
+                console.error('Failed to copy text: ', err);
+              });
+            }
+          });
         });
       });
       

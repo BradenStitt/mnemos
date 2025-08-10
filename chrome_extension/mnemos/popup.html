@@ -85,9 +85,27 @@
         margin-bottom: 8px;
         cursor: pointer;
         transition: background-color 0.2s;
+        position: relative;
       }
       .memory-item:hover {
         background-color: #3A3A3C;
+        border-color: #007AFF;
+      }
+      .memory-item::after {
+        content: "Click to inject";
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 10px;
+        color: #8E8E93;
+        background-color: #1C1C1E;
+        padding: 2px 6px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .memory-item:hover::after {
+        opacity: 1;
       }
       .memory-text {
         font-size: 14px;
