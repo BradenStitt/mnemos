@@ -564,7 +564,7 @@ function injectMem0Button() {
         iconImg.style.borderRadius = '50%';
 
         const label = document.createElement('span');
-        label.textContent = 'Mem0';
+        label.textContent = 'Mnemos';
 
         // Notification dot
         const notificationDot = document.createElement('div');
@@ -707,7 +707,7 @@ function injectMem0Button() {
     `;
     
     const labelText = document.createElement('span');
-    labelText.textContent = 'Mem0';
+    labelText.textContent = 'Mnemos';
     
     buttonLabel.appendChild(iconImg);
     buttonLabel.appendChild(labelText);
