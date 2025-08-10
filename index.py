@@ -28,8 +28,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # For development only
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Pydantic model for memory storage
@@ -48,6 +49,11 @@ async def semantic_search(text_query: str = None):
 
     return {"results": results}
 
+@app.options("/api/semantic-search")
+async def semantic_search_options():
+    """Handle CORS preflight requests for semantic-search endpoint"""
+    return {"message": "OK"}
+
 @app.get("/api/lexical-search")
 async def lexical_search(text_query: str = None):
     if not text_query or not text_query.strip():
@@ -57,6 +63,11 @@ async def lexical_search(text_query: str = None):
     results = prepare_results(sparse_response.result.hits)
     
     return {"results": results}
+
+@app.options("/api/lexical-search")
+async def lexical_search_options():
+    """Handle CORS preflight requests for lexical-search endpoint"""
+    return {"message": "OK"}
 
 @app.get("/api/cascading-retrieval")
 async def cascading_retrieval(text_query: str = None):
@@ -75,6 +86,11 @@ async def cascading_retrieval(text_query: str = None):
     results = deduped_results[:settings.pinecone_top_k]
 
     return {"results": results}
+
+@app.options("/api/cascading-retrieval")
+async def cascading_retrieval_options():
+    """Handle CORS preflight requests for cascading-retrieval endpoint"""
+    return {"message": "OK"}
 
 @app.post("/api/store-memory")
 async def store_memory(memory_request: MemoryStoreRequest):
@@ -116,6 +132,11 @@ async def store_memory(memory_request: MemoryStoreRequest):
     except Exception as e:
         print(f"Error storing memory in Pinecone: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to store memory: {str(e)}")
+
+@app.options("/api/store-memory")
+async def store_memory_options():
+    """Handle CORS preflight requests for store-memory endpoint"""
+    return {"message": "OK"}
 
 @app.get("/api/test")
 async def test_endpoint():
